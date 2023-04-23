@@ -14,6 +14,9 @@ Parameters:
     Description: The password for the database admin account
     Type: String
     NoEcho: true
+    MinLength: 8
+    AllowedPattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z\d])[A-Za-z\d!"#$%&''()*+,-./:;<=>?@[\]^_`{|}~]{8,}$'
+    ConstraintDescription: Must be at least 8 characters long, contain upper and lowercase letters, numbers, and special characters.
 
   KeyName:
     Description: Name of an existing EC2 KeyPair to enable SSH access to the Bastion Host
@@ -23,33 +26,19 @@ Resources:
   VPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: '10.0.0.0/16'
+      CidrBlock: '11.0.0.0/16'
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: 'MyVPC'
-
-  Subnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: '10.0.1.0/24'
-      Tags:
-        - Key: Name
-          Value: 'MySubnet1'
-
-  Subnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: '10.0.2.0/24'
-      Tags:
-        - Key: Name
-          Value: 'MySubnet2'
+          Value: !Sub "VPC-${AWS::StackName}"
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "InternetGateway-${AWS::StackName}"
 
   VPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -57,10 +46,44 @@ Resources:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
 
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 11.0.0.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "PublicSubnet-${AWS::StackName}"
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 11.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub "PrivateSubnet1-${AWS::StackName}"
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 11.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub "PrivateSubnet2-${AWS::StackName}"
+
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "PublicRouteTable-${AWS::StackName}"
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -72,26 +95,41 @@ Resources:
   PublicSubnetRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref Subnet1
+      SubnetId: !Ref PublicSubnet
       RouteTableId: !Ref PublicRouteTable
-
-  RDSSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: RDS security group
-      VpcId: !Ref VPC
 
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: EC2 security group
+      GroupDescription: Enable SSH access via port 22
       VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+
+  BastionHost:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup
+      ImageId: ami-052c9af0c988f8bbd # This is an Amazon Linux 2 LTS AMI ID; replace with the appropriate AMI ID for your region
+
+  EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      InstanceId: !Ref BastionHost
 
   MySQLRDSInstance:
     Type: AWS::RDS::DBInstance
     Properties:
       Engine: mysql
       MultiAZ: true
+      DBName: !Ref DBName
       MasterUsername: !Ref DBUser
       MasterUserPassword: !Ref DBPassword
       DBInstanceClass: db.t3.micro
@@ -101,13 +139,29 @@ Resources:
       DBSubnetGroupName: !Ref DBSubnetGroup
       BackupRetentionPeriod: 7
 
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable database access
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 11.0.0.0/16
+        # Add the following ingress rule to allow connections from the EC2SecurityGroup
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
+
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupDescription: Subnet group for RDS instance
       SubnetIds:
-        - !Ref Subnet1
-        - !Ref Subnet2
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
 
   RDSProxy:
     Type: AWS::RDS::DBProxy
@@ -118,8 +172,8 @@ Resources:
       VpcSecurityGroupIds:
         - !Ref RDSSecurityGroup
       VpcSubnetIds:
-        - !Ref Subnet1
-        - !Ref Subnet2
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
       Auth:
         - AuthScheme: SECRETS
           IAMAuth: DISABLED
@@ -139,39 +193,36 @@ Resources:
       ManagedPolicyArns:
         - 'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole'
 
+  RDSProxyTargetGroup:
+    Type: AWS::RDS::DBProxyTargetGroup
+    Properties:
+      DBProxyName: !Ref RDSProxy
+      TargetGroupName: default
+      DBInstanceIdentifiers:
+        - !Ref MySQLRDSInstance
+
   RDSSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
       Name: 'RDSInstanceSecret'
       SecretString: !Sub '{"username":"${DBUser}", "password":"${DBPassword}"}'
 
-  BastionHost:
-    Type: AWS::EC2::Instance
-    Properties:
-      InstanceType: t2.micro
-      KeyName: !Ref KeyName
-      SubnetId: !Ref Subnet1
-      SecurityGroupIds:
-        - !Ref EC2SecurityGroup
-      ImageId: ami-0c55b159cbfafe1f0 # This is an Amazon Linux 2 LTS AMI ID; replace with the appropriate AMI ID for your region
-
-  EIP:
-    Type: AWS::EC2::EIP
-    Properties:
-      InstanceId: !Ref BastionHost
-
 Outputs:
   VPCId:
     Description: The VPC ID
     Value: !Ref VPC
 
-  Subnet1Id:
-    Description: The Subnet1 ID
-    Value: !Ref Subnet1
+  PublicSubnetId:
+    Description: The `PublicSubnet` ID
+    Value: !Ref PublicSubnet
 
-  Subnet2Id:
-    Description: The Subnet2 ID
-    Value: !Ref Subnet2
+  PrivateSubnet1Id:
+    Description: The PrivateSubnet1 ID
+    Value: !Ref PrivateSubnet1
+
+  PrivateSubnet2Id:
+    Description: The PrivateSubnet2 ID
+    Value: !Ref PrivateSubnet2
 
   RDSInstanceEndpoint:
     Description: The RDS instance endpoint
