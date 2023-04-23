@@ -2,6 +2,14 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'CloudFormation template for MySQL RDS instance with multi-AZ, RDS Proxy, VPC, Subnets, and a Bastion Host with EIP.'
 
 Parameters:
+  EnvironmentName:
+    Description: The environment name (dev/stg/prd)
+    Type: String
+    AllowedValues:
+      - dev
+      - stg
+      - prd
+
   DBName:
     Description: The database name
     Type: String
@@ -21,7 +29,7 @@ Parameters:
     Description: Name of an existing EC2 KeyPair to enable SSH access to the Bastion Host
     Type: AWS::EC2::KeyPair::KeyName
   
-  ImageId:
+  EC2ImageId:
     Description: AMI Id of Bastion host
     Type: String
     Default: ami-052c9af0c988f8bbd
@@ -55,14 +63,14 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: !Sub "VPC-${AWS::StackName}"
+          Value: !Sub "${EnvironmentName}-VPC-${AWS::StackName}"
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub "InternetGateway-${AWS::StackName}"
+          Value: !Sub "${EnvironmentName}-InternetGateway-${AWS::StackName}"
 
   VPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -79,7 +87,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub "PublicSubnet-${AWS::StackName}"
+          Value: !Sub "${EnvironmentName}-PublicSubnet-${AWS::StackName}"
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -89,7 +97,7 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub "PrivateSubnet1-${AWS::StackName}"
+          Value: !Sub "${EnvironmentName}-PrivateSubnet1-${AWS::StackName}"
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -99,7 +107,7 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub "PrivateSubnet2-${AWS::StackName}"
+          Value: !Sub "${EnvironmentName}-PrivateSubnet2-${AWS::StackName}"
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -107,7 +115,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub "PublicRouteTable-${AWS::StackName}"
+          Value: !Sub "${EnvironmentName}-PublicRouteTable-${AWS::StackName}"
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -141,7 +149,7 @@ Resources:
       SubnetId: !Ref PublicSubnet
       SecurityGroupIds:
         - !Ref EC2SecurityGroup
-      ImageId: !Ref ImageId # This is an Amazon Linux 2 LTS AMI ID; replace with the appropriate AMI ID for your region
+      ImageId: !Ref EC2ImageId # This is an Amazon Linux 2 LTS AMI ID; replace with the appropriate AMI ID for your region
 
   EIP:
     Type: AWS::EC2::EIP
@@ -178,6 +186,9 @@ Resources:
           FromPort: 3306
           ToPort: 3306
           SourceSecurityGroupId: !Ref EC2SecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-RDSSecurityGroup-${AWS::StackName}"
 
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
