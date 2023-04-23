@@ -28,19 +28,19 @@ aws --profile "${aws_profile}" iam attach-role-policy --role-name "${role_name}"
 
 echo "Successfully created and attached custom policy to IAM role ${role_name}"
 
-# CloudFormationスタック名を入力
-read -p "Enter the CloudFormation stack name: " stack_name
+# # CloudFormationスタック名を入力
+# read -p "Enter the CloudFormation stack name: " stack_name
 
-# CloudFormationテンプレートファイルがあることを確認
-if [ ! -f cloudformation_template.yaml ]; then
-    echo "cloudformation_template.yaml not found. Please create it with your CloudFormation template."
-    exit 1
-fi
+# # CloudFormationテンプレートファイルがあることを確認
+# if [ ! -f cloudformation_template.yaml ]; then
+#     echo "cloudformation_template.yaml not found. Please create it with your CloudFormation template."
+#     exit 1
+# fi
 
-# IAMロールのARNを取得
-role_arn=$(aws --profile "${aws_profile}" iam get-role --role-name "${role_name}" --query 'Role.Arn' --output text)
+# # IAMロールのARNを取得
+# role_arn=$(aws --profile "${aws_profile}" iam get-role --role-name "${role_name}" --query 'Role.Arn' --output text)
 
-# CloudFormationスタックの作成
-aws --profile "${aws_profile}" cloudformation create-stack --stack-name "${stack_name}" --template-body file://cloudformation_template.yaml --role-arn "${role_arn}"
+# # CloudFormationスタックの作成
+# aws --profile "${aws_profile}" cloudformation create-stack --stack-name "${stack_name}" --template-body file://cloudformation_template.yaml --role-arn "${role_arn}"
 
-echo "CloudFormation stack ${stack_name} creation started using IAM role ${role_name}"
+# echo "CloudFormation stack ${stack_name} creation started using IAM role ${role_name}"
