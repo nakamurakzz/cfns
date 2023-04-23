@@ -1,0 +1,51 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+      {
+          "Effect": "Allow",
+          "Action": [
+              "cloudformation:*"
+          ],
+          "Resource": "*"
+      },
+      {
+          "Effect": "Allow",
+          "Action": [
+              "rds:*"
+          ],
+          "Resource": "*"
+      },
+      {
+          "Effect": "Allow",
+          "Action": [
+              "ec2:*"
+          ],
+          "Resource": "*"
+      },
+      {
+          "Effect": "Allow",
+          "Action": [
+              "secretsmanager:CreateSecret",
+              "secretsmanager:DeleteSecret",
+              "secretsmanager:DescribeSecret",
+              "secretsmanager:UpdateSecret"
+          ],
+          "Resource": "*"
+      },
+      {
+          "Effect": "Allow",
+          "Action": [
+              "iam:CreateRole",
+              "iam:DeleteRole",
+              "iam:UpdateAssumeRolePolicy",
+              "iam:AttachRolePolicy",
+              "iam:DetachRolePolicy",
+              "iam:GetRole",
+              "iam:ListAttachedRolePolicies",
+              "iam:ListRolePolicies",
+              "iam:GetRolePolicy"
+          ],
+          "Resource": "*"
+      }
+  ]
+}
