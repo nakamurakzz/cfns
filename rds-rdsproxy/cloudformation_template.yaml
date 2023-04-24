@@ -213,6 +213,8 @@ Resources:
         - AuthScheme: SECRETS
           IAMAuth: DISABLED
           SecretArn: !Ref RDSSecret
+    DependsOn:
+      - MySQLRDSInstance
 
   RDSProxyRole:
     Type: AWS::IAM::Role
